@@ -1,1 +1,2 @@
-# Applied_Statistics_with_R
+# Applied Statistics with R
+# TMO cours M1 deuxième semestre
