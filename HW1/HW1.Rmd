@@ -1,0 +1,73 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(ggplot2)
+```
+
+```{r}
+num_Trials <- 10^7
+```
+
+# fix the seed to have reproductive results 
+```{r}
+set.seed(2022)
+```
+
+# sample x from a uniform distribution
+```{r}
+x <- runif(num_Trials, min = -pi/2, max = pi/2)
+```
+
+
+# sample y from a uniform distribution
+```{r}
+y_min <- -pi
+y_max <- 1
+y <- runif(num_Trials, min = y_min, max = y_max)
+```
+# idea : number of points inside / total points = area inside / total area 
+
+# Determine which points are inside:
+# create a vector of TRUE and FALSE values
+
+# for a point to be inside, conditions to be satisfied: 
+# 1) y > - 2*x - pi 
+# 2) y > 2*x - pi
+# 3) y < -sin(2*x) when x >= pi/2 and < 0 
+# 4) y < sin(2*x) when x >= 0 and <= pi/2 
+```{r}
+is_inside <- (y > - 2*x - pi) & 
+              (y > 2*x - pi) & 
+              (((y < -sin(2*x)) & x < 0 ) |  
+              ((y < sin(2*x)) & x >= 0 )  )
+```
+
+# compute number of points inside / total points
+```{r}
+ratio_inside <- sum(is_inside) / num_Trials
+ratio_inside
+```
+
+# compute total area
+```{r}
+total_area_rect <- pi * (y_max - y_min)
+total_area_rect
+```
+
+# compute area inside
+```{r}
+area_inside <- total_area_rect * ratio_inside
+area_inside   # solution : area inside -----------> ####################
+```
+
+# plot
+```{r}
+df <- data.frame(x=x, y=y, is_inside=is_inside)
+
+ggplot(df, aes(x, y)) + 
+  geom_point(aes(color=is_inside)) + 
+  theme_bw()
+```
