@@ -1,1 +1,2 @@
-# Applied_Statistics_with_R
+# Applied Statistics with R
+# ITMO cours M1 deuxième semestre
