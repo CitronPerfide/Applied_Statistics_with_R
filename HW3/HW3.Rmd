@@ -1,0 +1,163 @@
+---
+title: "Guillaume"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r }
+library("RIdeogram")
+library("dplyr")
+library(tidyr)
+library(plyr)
+library(stringr)
+```
+
+
+# Reading the data
+
+```{r}
+gene_mapping <- read.csv('gene_mapping.tsv', sep='\t', header=TRUE)
+dongola <- read.csv("DONGOLA_genes.tsv", sep='\t', header=TRUE)
+zanu <- read.csv("ZANU_genes.tsv", sep='\t', header=TRUE)
+```
+
+```{r }
+head(gene_mapping)
+```
+
+### Making the karyotype table
+```{r}
+karyotype <- setNames(data.frame(matrix(ncol=7, nrow=0)), c("Chr", "Start", "End", "fill", "species", "size", "color"))
+karyotype <- rbind(karyotype, data.frame(Chr=c('X','2','3'), Start=c(1, 1, 1), End=c(27238055, 114783175, 97973315), fill='969696', species='Zanu', size=12, color='252525'))
+karyotype <- rbind(karyotype, data.frame(Chr=c('X','2','3'), Start=c(1, 1, 1), End=c(26910000, 111990000, 95710000), fill='969696', species='Dongola', size=12, color='252525'))
+```
+
+### Preparing DONG column
+```{r}
+gene_mapping <- separate(data=gene_mapping, col=DONG, into=c("seq_id_dong", "mid_dong", 'strand_dong', 'len_dong', 'name_dong'), sep=",")
+```
+
+### Choose in contig column only 2, 3, X chromosomes
+```{r}
+gene_mapping <- gene_mapping[gene_mapping$contig %in% c('2', '3', 'X'),]
+```
+
+```{r}
+head(gene_mapping)
+```
+
+###Perform mapping between chromosomes names and sequences IDs
+###From NCBI:
+###Chr 2 : NC_053517.1
+###Chr 3 : NC_053518.1	
+###Chr X : NC_053519.1
+
+```{r}
+gene_mapping$seq_id_dong[gene_mapping$seq_id_dong == 'NC_053517.1'] <- '2'
+gene_mapping$seq_id_dong[gene_mapping$seq_id_dong == 'NC_053518.1'] <- '3'
+gene_mapping$seq_id_dong[gene_mapping$seq_id_dong == 'NC_053519.1'] <- 'X'
+head(gene_mapping)
+```
+
+### Choosing only 2, 3, X chromosomes in DONGOLA
+```{r}
+gene_mapping <- gene_mapping[gene_mapping$seq_id %in% c('2', '3', 'X'),]
+```
+
+### Removing DONG from gene names
+```{r}
+gene_mapping$name_dong <- gsub("^DONG_(\\w+)", "\\1", gene_mapping$name_dong)
+head(gene_mapping)
+```
+
+## Remove duplicated genes
+```{r}
+gene_mapping <- gene_mapping[!duplicated(gene_mapping$name),]
+```
+
+## Synteny table
+
+
+```{r}
+colnames(zanu) <- c('ID_1', 'Start_1', 'End_1', 'Strand_1')
+colnames(dongola) <- c('ID_2', 'Start_2', 'End_2', 'Strand_2')
+synteny_table <- merge(gene_mapping, zanu, by.x='name', by.y='ID_1')
+synteny_table <- merge(synteny_table, dongola, by.x='name_dong', by.y='ID_2')
+names(synteny_table)[names(synteny_table) == 'contig'] <- 'Species_1'
+names(synteny_table)[names(synteny_table) == 'seq_id_dong'] <- 'Species_2'
+synteny_table$Species_1 <-mapvalues(synteny_table$Species_1,
+                                    from=c('X', '2', '3'),
+                                    to=c(1, 2, 3))
+synteny_table$Species_2 <-mapvalues(synteny_table$Species_2,
+                                    from=c('X', '2', '3'),
+                                    to=c(1, 2, 3))
+synteny_table$Species_1 <- as.integer(synteny_table$Species_1)
+synteny_table$Species_2 <- as.integer(synteny_table$Species_2)
+head(synteny_table)
+```
+
+```{r}
+red <- 'FF0000'
+blue <- '5891bf'
+dong_max_2 <- 111990000
+dong_max_3 <- 95710000
+color <- function(strand1, strand2, red, blue){
+  if (strand1 == strand2)
+    return(red)
+  else
+    return(blue)
+}
+synteny_table$fill <- mapply(color, 
+                             synteny_table$Strand_1, 
+                             synteny_table$Strand_2,
+                             red,
+                             blue)
+# inverse forc hr 2 ad chr3
+two_to_three_color <- function(chr1, strand1, strand2, prev_fill, red, blue){
+  if (chr1 == 2 || chr1 == 3){
+    if (strand1 == strand2)
+      return(red)
+    else
+      return(blue)
+  }
+  return(prev_fill)
+}
+synteny_table$fill <- mapply(two_to_three_color, 
+                             synteny_table$Species_1, 
+                             synteny_table$Strand_1, 
+                             synteny_table$Strand_2, 
+                             synteny_table$fill, 
+                             red, 
+                             blue)
+two_to_three <- function(chr1, pos2, dong_max_2, dong_max_3){
+  if (chr1 == 2 || chr1 == 3){
+    if (chr1 == 2)
+      return(dong_max_2 - pos2 + 1)
+    else
+      return(dong_max_3 - pos2 + 1)
+  }
+  return(pos2)
+}
+synteny_table$Start_2 <- mapply(two_to_three, 
+                                synteny_table$Species_1, 
+                                synteny_table$Start_2, 
+                                dong_max_2, 
+                                dong_max_3)
+synteny_table$End_2 <- mapply(two_to_three, 
+                              synteny_table$Species_1, 
+                              synteny_table$End_2, 
+                              dong_max_2, 
+                              dong_max_3)
+synteny_table <- synteny_table[c('Species_1', 'Start_1', 'End_1', 'Species_2', 'Start_2', 'End_2', 'fill')]
+synteny_table <- synteny_table[synteny_table$Species_1==synteny_table$Species_2, ]
+head(synteny_table)
+```
+
+### Generating the .svg and converting it in.png
+```{r}
+ideogram(karyotype=karyotype, synteny=synteny_table)
+convertSVG("chromosome.svg", device="png")
+```
